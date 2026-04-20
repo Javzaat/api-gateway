@@ -7,6 +7,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
 const JSON_SERVICE = "https://user-json-service-s9oyc.ondigitalocean.app";
 const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
