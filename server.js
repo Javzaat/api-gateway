@@ -9,78 +9,94 @@ app.use(cors());
 app.use(express.json());
 
 const JSON_SERVICE = "https://user-json-service-s9oyc.ondigitalocean.app";
+const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
 
-const redisClient = createClient({
-  url: "redis://127.0.0.1:6379"
+const PORT = process.env.PORT || 3000;
+
+let redisClient = null;
+let redisAvailable = false;
+
+async function setupRedis() {
+  try {
+    redisClient = createClient({
+      url: process.env.REDIS_URL || "redis://127.0.0.1:6379"
+    });
+
+    redisClient.on("error", (err) => {
+      console.log("Redis error:", err.message);
+    });
+
+    await redisClient.connect();
+    redisAvailable = true;
+    console.log("Connected to Redis");
+  } catch (error) {
+    redisAvailable = false;
+    console.log("Redis unavailable. Running without cache.");
+  }
+}
+
+app.get("/", (req, res) => {
+  res.send("API Gateway ажиллаж байна");
 });
 
-redisClient.on("error", (err) => {
-  console.error("Redis error:", err);
+app.use("/api/users", async (req, res) => {
+  const cacheKey = req.originalUrl;
+
+  try {
+    if (req.method === "GET" && redisAvailable) {
+      const cachedData = await redisClient.get(cacheKey);
+
+      if (cachedData) {
+        console.log("CACHE HIT:", cacheKey);
+        return res.json(JSON.parse(cachedData));
+      }
+    }
+
+    const response = await axios({
+      method: req.method,
+      url: JSON_SERVICE + "/users" + req.originalUrl.replace("/api/users", ""),
+      data: req.body,
+      headers: {
+        Authorization: req.headers.authorization || "",
+        "Content-Type": "application/json"
+      }
+    });
+
+    if (req.method === "GET" && redisAvailable) {
+      await redisClient.setEx(cacheKey, 60, JSON.stringify(response.data));
+      console.log("CACHE MISS:", cacheKey);
+    }
+
+    res.json(response.data);
+  } catch (error) {
+    console.error("Gateway Error:", error.message);
+    res.status(500).send("Gateway Error");
+  }
+});
+
+app.use("/api/soap", async (req, res) => {
+  try {
+    const response = await axios({
+      method: req.method,
+      url: SOAP_SERVICE,
+      data: req.body,
+      headers: {
+        "Content-Type": req.headers["content-type"] || "text/xml"
+      }
+    });
+
+    res.send(response.data);
+  } catch (error) {
+    console.error("SOAP Gateway Error:", error.message);
+    res.status(500).send("SOAP Gateway Error");
+  }
 });
 
 async function startServer() {
-  await redisClient.connect();
-  console.log("Connected to Redis");
+  await setupRedis();
 
-  app.get("/", (req, res) => {
-    res.send("API Gateway ажиллаж байна");
-  });
-
-  app.use("/api/users", async (req, res) => {
-    const cacheKey = req.originalUrl;
-
-    try {
-      if (req.method === "GET") {
-        const cachedData = await redisClient.get(cacheKey);
-
-        if (cachedData) {
-          console.log("CACHE HIT:", cacheKey);
-          return res.json(JSON.parse(cachedData));
-        }
-      }
-
-      const response = await axios({
-        method: req.method,
-        url: JSON_SERVICE + "/users" + req.originalUrl.replace("/api/users", ""),
-        data: req.body,
-        headers: {
-          Authorization: req.headers.authorization || "",
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (req.method === "GET") {
-        await redisClient.setEx(cacheKey, 60, JSON.stringify(response.data));
-        console.log("CACHE MISS:", cacheKey);
-      }
-
-      res.json(response.data);
-    } catch (error) {
-      console.error(error.message);
-      res.status(500).send("Gateway Error");
-    }
-  });
-
-  app.use("/api/soap", async (req, res) => {
-    try {
-      const response = await axios({
-        method: req.method,
-        url: "https://user-soap-service-fcqlw.ondigitalocean.app/ws",
-        data: req.body,
-        headers: {
-          "Content-Type": req.headers["content-type"] || "text/xml"
-        }
-      });
-
-      res.send(response.data);
-    } catch (error) {
-      console.error("SOAP Gateway Error:", error.message);
-      res.status(500).send("SOAP Gateway Error");
-    }
-  });
-
-  app.listen(3000, () => {
-    console.log("API Gateway running on http://localhost:3000");
+  app.listen(PORT, () => {
+    console.log(`API Gateway running on port ${PORT}`);
   });
 }
 
