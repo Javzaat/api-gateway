@@ -11,7 +11,7 @@ app.use(express.json());
 app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
 // Private IP-ууд
-const JSON_SERVICE = "http://10.15.0.6:8080";
+const JSON_SERVICE = "http://10.104.0.4:8080";
 const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
 
 // Gateway droplet-ийн private IP
