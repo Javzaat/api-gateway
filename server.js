@@ -9,7 +9,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
-const JSON_SERVICE = "https://user-json-service-s9oyc.ondigitalocean.app";
+const JSON_SERVICE = "http://10.104.0.4:8080";
 const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
 
 const PORT = process.env.PORT || 3000;
