@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
+const http = require("http");
 const { createClient } = require("redis");
 
 const app = express();
@@ -9,8 +10,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
-const JSON_SERVICE = "http://10.104.0.4:8080";
+// Private IP-ууд
+const JSON_SERVICE = "http://10.15.0.6:8080";
 const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
+
+// Gateway droplet-ийн private IP
+const GATEWAY_PRIVATE_IP = "10.15.0.5";
 
 const PORT = process.env.PORT || 3000;
 
@@ -63,7 +68,11 @@ app.use("/api/users", async (req, res) => {
       headers: {
         Authorization: req.headers.authorization || "",
         "Content-Type": "application/json"
-      }
+      },
+      httpAgent: new http.Agent({
+        localAddress: GATEWAY_PRIVATE_IP
+      }),
+      timeout: 10000
     });
 
     if (req.method === "GET" && redisAvailable) {
@@ -74,6 +83,9 @@ app.use("/api/users", async (req, res) => {
     res.json(response.data);
   } catch (error) {
     console.error("Gateway Error:", error.message);
+    if (error.response) {
+      return res.status(error.response.status).send(error.response.data);
+    }
     res.status(500).send("Gateway Error");
   }
 });
@@ -86,12 +98,16 @@ app.use("/api/soap", async (req, res) => {
       data: req.body,
       headers: {
         "Content-Type": req.headers["content-type"] || "text/xml"
-      }
+      },
+      timeout: 10000
     });
 
     res.send(response.data);
   } catch (error) {
     console.error("SOAP Gateway Error:", error.message);
+    if (error.response) {
+      return res.status(error.response.status).send(error.response.data);
+    }
     res.status(500).send("SOAP Gateway Error");
   }
 });
