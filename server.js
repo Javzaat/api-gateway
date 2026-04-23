@@ -10,7 +10,8 @@ app.use(express.json());
 app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
 const JSON_SERVICE = process.env.JSON_SERVICE || "http://10.104.0.4:8080";
-const SOAP_SERVICE = process.env.SOAP_SERVICE || "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
+const SOAP_SERVICE = process.env.SOAP_SERVICE || "http://10.104.0.6:8081/ws";
+const FILE_SERVICE = process.env.FILE_SERVICE || "http://10.104.0.7:8082";
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const PORT = process.env.PORT || 3000;
@@ -21,7 +22,7 @@ let redisAvailable = false;
 async function setupRedis() {
   try {
     redisClient = createClient({
-      url: process.env.REDIS_URL || "redis://10.104.0.3:6379",
+      url: REDIS_URL,
       socket: {
         reconnectStrategy: false
       }
@@ -73,7 +74,7 @@ app.use("/api/users", async (req, res) => {
       console.log("CACHE MISS:", cacheKey);
     }
 
-    res.json(response.data);
+    res.status(response.status).json(response.data);
   } catch (error) {
     console.error("Gateway Error:", error.message);
     if (error.response) {
@@ -95,13 +96,36 @@ app.use("/api/soap", async (req, res) => {
       timeout: 10000
     });
 
-    res.send(response.data);
+    res.status(response.status).send(response.data);
   } catch (error) {
     console.error("SOAP Gateway Error:", error.message);
     if (error.response) {
       return res.status(error.response.status).send(error.response.data);
     }
     res.status(500).send("SOAP Gateway Error");
+  }
+});
+
+app.use("/api/files", async (req, res) => {
+  try {
+    const response = await axios({
+      method: req.method,
+      url: FILE_SERVICE + req.originalUrl.replace("/api/files", ""),
+      data: req.body,
+      headers: {
+        Authorization: req.headers.authorization || "",
+        "Content-Type": req.headers["content-type"] || "application/json"
+      },
+      timeout: 10000
+    });
+
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error("File Gateway Error:", error.message);
+    if (error.response) {
+      return res.status(error.response.status).send(error.response.data);
+    }
+    res.status(500).send("File Gateway Error");
   }
 });
 
