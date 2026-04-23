@@ -21,7 +21,7 @@ let redisAvailable = false;
 async function setupRedis() {
   try {
     redisClient = createClient({
-      url: REDIS_URL,
+      url: process.env.REDIS_URL || "redis://10.104.0.3:6379",
       socket: {
         reconnectStrategy: false
       }
