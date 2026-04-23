@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
-const http = require("http");
 const { createClient } = require("redis");
 
 const app = express();
@@ -10,12 +9,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.text({ type: ["text/xml", "application/soap+xml"] }));
 
-// Private IP-ууд
-const JSON_SERVICE = "http://10.104.0.4:8080";
-const SOAP_SERVICE = "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
-
-// Gateway droplet-ийн private IP
-const GATEWAY_PRIVATE_IP = "10.15.0.5";
+const JSON_SERVICE = process.env.JSON_SERVICE || "http://10.104.0.4:8080";
+const SOAP_SERVICE = process.env.SOAP_SERVICE || "https://user-soap-service-fcqlw.ondigitalocean.app/ws";
+const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const PORT = process.env.PORT || 3000;
 
@@ -25,7 +21,7 @@ let redisAvailable = false;
 async function setupRedis() {
   try {
     redisClient = createClient({
-      url: "redis://127.0.0.1:6379",
+      url: REDIS_URL,
       socket: {
         reconnectStrategy: false
       }
@@ -69,9 +65,6 @@ app.use("/api/users", async (req, res) => {
         Authorization: req.headers.authorization || "",
         "Content-Type": "application/json"
       },
-      httpAgent: new http.Agent({
-        localAddress: GATEWAY_PRIVATE_IP
-      }),
       timeout: 10000
     });
 
