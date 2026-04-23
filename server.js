@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const { createClient } = require("redis");
+const multer = require("multer");
+const FormData = require("form-data");
 
 const app = express();
 
@@ -15,6 +17,7 @@ const FILE_SERVICE = process.env.FILE_SERVICE || "http://10.104.0.7:8082";
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const PORT = process.env.PORT || 3000;
+const upload = multer();
 
 let redisClient = null;
 let redisAvailable = false;
@@ -106,16 +109,25 @@ app.use("/api/soap", async (req, res) => {
   }
 });
 
-app.use("/api/files", async (req, res) => {
+app.post("/api/files/upload", upload.single("file"), async (req, res) => {
   try {
+    if (!req.file) {
+      return res.status(400).send("File not provided");
+    }
+
+    const form = new FormData();
+    form.append("file", req.file.buffer, req.file.originalname);
+
     const response = await axios({
-      method: req.method,
-      url: FILE_SERVICE + req.originalUrl.replace("/api", ""),
-      data: req.body,
+      method: "POST",
+      url: FILE_SERVICE + "/files/upload",
+      data: form,
       headers: {
         Authorization: req.headers.authorization || "",
-        "Content-Type": req.headers["content-type"] || "application/json"
+        ...form.getHeaders()
       },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
       timeout: 10000
     });
 
