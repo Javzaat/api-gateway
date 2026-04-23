@@ -17,7 +17,8 @@ const FILE_SERVICE = process.env.FILE_SERVICE || "http://10.104.0.7:8082";
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const PORT = process.env.PORT || 3000;
-const upload = multer();
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 let redisClient = null;
 let redisAvailable = false;
@@ -116,20 +117,36 @@ app.post("/api/files/upload", upload.single("file"), async (req, res) => {
     }
 
     const form = new FormData();
-    form.append("file", req.file.buffer, req.file.originalname);
-
-    const response = await axios({
-      method: "POST",
-      url: FILE_SERVICE + "/files/upload",
-      data: form,
-      headers: {
-        Authorization: req.headers.authorization || "",
-        ...form.getHeaders()
-      },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-      timeout: 10000
+    form.append("file", req.file.buffer, {
+      filename: req.file.originalname,
+      contentType: req.file.mimetype,
+      knownLength: req.file.size
     });
+
+    const headers = {
+      Authorization: req.headers.authorization || "",
+      ...form.getHeaders()
+    };
+
+    const contentLength = await new Promise((resolve, reject) => {
+      form.getLength((err, length) => {
+        if (err) reject(err);
+        else resolve(length);
+      });
+    });
+
+    headers["Content-Length"] = contentLength;
+
+    const response = await axios.post(
+      FILE_SERVICE + "/files/upload",
+      form,
+      {
+        headers,
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity,
+        timeout: 10000
+      }
+    );
 
     res.status(response.status).send(response.data);
   } catch (error) {
