@@ -110,7 +110,7 @@ app.use("/api/files", async (req, res) => {
   try {
     const response = await axios({
       method: req.method,
-      url: FILE_SERVICE + req.originalUrl.replace("/api/files", ""),
+      url: FILE_SERVICE + req.originalUrl.replace("/api", ""),
       data: req.body,
       headers: {
         Authorization: req.headers.authorization || "",
