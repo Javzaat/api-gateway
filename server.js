@@ -17,7 +17,6 @@ const FILE_SERVICE = process.env.FILE_SERVICE || "http://10.104.0.7:8082";
 const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
 
 const PORT = process.env.PORT || 3000;
-
 const upload = multer({ storage: multer.memoryStorage() });
 
 let redisClient = null;
