@@ -32,7 +32,18 @@ async function setupRedis() {
     });
 
     redisClient.on("error", (err) => {
+      redisAvailable = false;
       console.log("Redis error:", err.message);
+    });
+
+    redisClient.on("end", () => {
+      redisAvailable = false;
+      console.log("Redis connection closed");
+    });
+
+    redisClient.on("ready", () => {
+      redisAvailable = true;
+      console.log("Redis ready");
     });
 
     await redisClient.connect();
@@ -44,6 +55,48 @@ async function setupRedis() {
   }
 }
 
+async function getCachedData(cacheKey) {
+  try {
+    if (redisAvailable && redisClient && redisClient.isOpen) {
+      const cachedData = await redisClient.get(cacheKey);
+
+      if (cachedData) {
+        console.log("CACHE HIT:", cacheKey);
+        return JSON.parse(cachedData);
+      }
+    }
+  } catch (error) {
+    redisAvailable = false;
+    console.log("Redis GET failed:", error.message);
+  }
+
+  return null;
+}
+
+async function setCachedData(cacheKey, data) {
+  try {
+    if (redisAvailable && redisClient && redisClient.isOpen) {
+      await redisClient.setEx(cacheKey, 60, JSON.stringify(data));
+      console.log("CACHE MISS:", cacheKey);
+    }
+  } catch (error) {
+    redisAvailable = false;
+    console.log("Redis SET failed:", error.message);
+  }
+}
+
+async function invalidateUsersCache() {
+  try {
+    if (redisAvailable && redisClient && redisClient.isOpen) {
+      await redisClient.del("/api/users");
+      console.log("CACHE INVALIDATED: /api/users");
+    }
+  } catch (error) {
+    redisAvailable = false;
+    console.log("Redis DEL failed:", error.message);
+  }
+}
+
 app.get("/", (req, res) => {
   res.send("API Gateway ажиллаж байна");
 });
@@ -52,12 +105,11 @@ app.use("/api/users", async (req, res) => {
   const cacheKey = req.originalUrl;
 
   try {
-    if (req.method === "GET" && redisAvailable) {
-      const cachedData = await redisClient.get(cacheKey);
+    if (req.method === "GET") {
+      const cachedData = await getCachedData(cacheKey);
 
       if (cachedData) {
-        console.log("CACHE HIT:", cacheKey);
-        return res.json(JSON.parse(cachedData));
+        return res.json(cachedData);
       }
     }
 
@@ -72,9 +124,12 @@ app.use("/api/users", async (req, res) => {
       timeout: 10000
     });
 
-    if (req.method === "GET" && redisAvailable) {
-      await redisClient.setEx(cacheKey, 60, JSON.stringify(response.data));
-      console.log("CACHE MISS:", cacheKey);
+    if (req.method === "GET") {
+      await setCachedData(cacheKey, response.data);
+    }
+
+    if (["POST", "PUT", "DELETE"].includes(req.method)) {
+      await invalidateUsersCache();
     }
 
     res.status(response.status).json(response.data);
